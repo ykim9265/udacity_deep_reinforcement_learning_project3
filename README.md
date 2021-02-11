@@ -12,35 +12,22 @@ It provides an implementation of a learning agent that solves the "Tennis" envir
 ![Tennis Environment](./img/tennis.png "Tennis Environment")
 
 
-In the "Tennis" environment, two agents control rackets to bounce a ball over a net. If an agent hits the ball over the net, it receives a reward of +0.1. If an agent lets a ball hit the ground or hits the ball out of bounds, it receives a reward of -0.01. Thus, the goal of each agent is to keep the ball in play.
+In the "Tennis" environment, there are 2 agents, each holding a racket. 
+For each episode, a tennis ball is dropped onto one of the agents, and each agent has to hit the ball over the net.
+As for the reward, if an agent hits the ball over the net, it gets a reward of +0.1.
+If the ball hits the ground or out of bounds, then the agent receives a reward of -0.01.
+Thus each agent tries to maximize its sum of reward for each episode.
 
-The observation space consists of 8 variables corresponding to the position and velocity of the ball and racket. Each agent receives its own, local observation. Two continuous actions are available, corresponding to movement toward (or away from) the net, and jumping.
-
-The task is episodic, and in order to solve the environment, your agents must get an average score of +0.5 (over 100 consecutive episodes, after taking the maximum over both agents). Specifically,
-
-    After each episode, we add up the rewards that each agent received (without discounting), to get a score for each agent. This yields 2 (potentially different) scores. We then take the maximum of these 2 scores.
-    This yields a single score for each episode.
-
-The environment is considered solved, when the average (over 100 episodes) of those scores is at least +0.5.
-
-
-In the "Tennis" environment, an agent is a double-jointed arm that tries to position the aim at the 
-goal location as long as possible. 
-The state space has 33 dimensions, containing the arm's position, rotation, velocity, and angular velocities.
-With this state information, the agent has to maximize total reward by selecting actions for the joints of the arm.
-At each time step, the 4 available actions correspond to torques associated with the 2 joints of the agent's arm.
-Each torque action is associated with a value in range [-1, 1].
+Each agent gets its own state, which contains position and velocities of the ball and racket.
+In terms of actions, each agent can 1) move toward or away from the net, or 2) jump.
 
 The task is episodic, meaning it has clear beginning and an end, and everything gets reset at the start of each episode.
-In terms of rewards, +0.1 is provided each time step when the arm is at the goal location.
-The environment is considered "solved" when the agent has +30 average score during past 100 consecutive episodes.
+Since there are two agents, a maximum score is calculated per episode over the two agents.
+And the environment is considered "solved" when average of this maximum score of +0.5 over past 100 consecutive episodes is achieved.
+
+Note that to run this Tennis enviroment, the user has to use the provided Unity environment file, and *not* use the environment on the ML-agents GitHub page.
 
 
-There are two different ways to solve the Reacher environment: 1) single agent vs 2) multiple agents.
-In the case of the single agent version, the agent must get an average score of +30 over 100 consecutive episodes.
-In the case of the multiple agents version, scores across all agents are averaged, and average of this average score overe 100 consecutive episodes is taken. If the double average score of +30 reached over 100 consecutive episodes, then the environment is solved.
-
-Note that to run this Reacher enviroment, the user has to use the provided Unity environment file, and *not* use the environment on the ML-agents GitHub page.
 
 
 # Getting Started
@@ -83,9 +70,6 @@ To run the notebook, you need to download one of the prepared Unity environment 
 
 2. Place the file in the same folder as the training code notebook `training_code_tennis.ipynb`, and unzip (or decompress) the file.
 
-
-
-The zip file needs to be placed in the same folder as the training notebook, and uncompressed.
 
 #### 2. Explore the Environment
 
