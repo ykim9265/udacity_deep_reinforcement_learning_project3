@@ -28,7 +28,8 @@ TAU = 1e-3              # for soft update of target parameters
 LR_ACTOR = 1e-4         # learning rate of the actor 
 LR_CRITIC = 3e-4        # learning rate of the critic
 UPDATE_INTERVAL = 4     # An agent will call the learn function every 'UPDATE_INTERVAL' steps the agent makes.
-STEPS_RANDOM = 10000     # Number of initial steps where agent will act random.
+FC1 = 512
+FC2 = 256
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -37,7 +38,7 @@ print('device:', device)
 class Agent():
     """Interacts with and learns from the environment."""
     
-    def __init__(self, state_size, action_size, num_agents = 2, random_seed=0):
+    def __init__(self, state_size, action_size, steps_random=0, random_seed=0):
         """Initialize an Agent object.
         
         Parameters
@@ -53,17 +54,17 @@ class Agent():
         """
         self.state_size = state_size
         self.action_size = action_size
-        self.num_agents = num_agents
         self.seed = random.seed(random_seed)
+        self.steps_random = steps_random
 
         # Actor Network (w/ Target Network)
-        self.actor_local = Actor(state_size, action_size, random_seed).to(device)
-        self.actor_target = Actor(state_size, action_size, random_seed).to(device)
+        self.actor_local = Actor(state_size, action_size, random_seed, fc1_units=FC1, fc2_units=FC2).to(device)
+        self.actor_target = Actor(state_size, action_size, random_seed, fc1_units=FC1, fc2_units=FC2).to(device)
         self.actor_optimizer = optim.Adam(self.actor_local.parameters(), lr=LR_ACTOR)
 
         # Critic Network (w/ Target Network)
-        self.critic_local = Critic(state_size, action_size, random_seed).to(device)
-        self.critic_target = Critic(state_size, action_size, random_seed).to(device)
+        self.critic_local = Critic(state_size, action_size, random_seed, fc1_units=FC1, fc2_units=FC2).to(device)
+        self.critic_target = Critic(state_size, action_size, random_seed, fc1_units=FC1, fc2_units=FC2).to(device)
         self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=LR_CRITIC)
 
         # Initialize target networks
@@ -81,58 +82,49 @@ class Agent():
         # Track number of steps: # YK
         self.num_steps = 1
 
-    def act(self, states, add_noise=True):
+    def act(self, state, score_max=None, add_noise=True):
         """Returns actions for given state as per current policy.
         
         Parameters
         ----------
-        states : np.ndarray
-            A 2-dimensional array containing a list of states.
+        score : float
+            max score over 2 agents per episode.
         """
-
-        states = torch.from_numpy(states).float().to(device)
+        state = torch.from_numpy(state).float().to(device)
         self.actor_local.eval()
         with torch.no_grad():
-            actions = self.actor_local(states).cpu().data.numpy()
+            actions = self.actor_local(state).cpu().data.numpy()
         self.actor_local.train()
         if add_noise:
-            actions += self.noise.sample()  # ORIGINAL
+            if score_max == None:
+                actions += self.noise.sample()  # ORIGINAL
+            else:
+                score_max = np.min([0.25, score_max])  # Limit to [0, 0.25]
+                noise_scale = 1.0 - score_max / 0.25  # if score_max is high, noise_scale will be close to zero. If score_max=0, noise_scale=1.
 
-        if self.num_steps < STEPS_RANDOM:
-            actions = np.random.randn(self.num_agents, self.action_size) # select an action (for each agent)
+                actions += noise_scale * self.noise.sample()
 
-                   
-        actions = np.clip(actions, -1, 1)
+            # Add noise using normal distribution
+            #scale = 0.005
+            #dx = np.array([np.random.normal(0,scale) for i in range(self.action_size)])
+            #action = action + dx
 
-        #print('act: after clipping 1actions', actions.shape, actions)
-        #print('act: states', states.shape, states)
+        if self.num_steps < self.steps_random:
+            actions = np.random.randn(1, self.action_size) # select an action (for each agent)            
+        if self.num_steps == self.steps_random:
+            print('steps_random={} reached'.format(self.steps_random))
+
+        actions = np.clip(actions, -1, 1) 
 
         return actions
     
-    def step(self, states, actions, rewards, next_states, dones):
-        """Save experience in replay memory, and use random sample from buffer to learn.
-        
-        Parameters
-        ----------
-        states : np.narray
-            2-dimensional array containing a list of states.
-
-        actions : np.array
-            2-dimensiona array containing a list of actions. One row per one agent's action.
-
-        """
-        
-        # print('step: state', states.shape)
-        # print('step: action', actions.shape)
-        # print('step: reward', len(rewards))
-        # print('step: next_state', next_states.shape)
-        # print('step: done', len(dones))
+    def step(self, state, action, reward, next_state, done):
+        """Save experience in replay memory, and use random sample from buffer to learn."""
         
         self.num_steps += 1  # YK
 
         # Save experience / reward
-        for state, action, reward, next_state, done in zip(states, actions, rewards, next_states, dones):
-            self.memory.add(state, action, reward, next_state, done)
+        self.memory.add(state, action, reward, next_state, done)
 
         # Learn, if enough samples are available in memory
         if self.num_steps % UPDATE_INTERVAL == 0:
@@ -166,11 +158,6 @@ class Agent():
         Q_targets_next = self.critic_target(next_states, actions_next)
 
         # Compute Q targets for current states (y_i)
-        #print('rewards:', rewards.shape)
-        #print('Q_targets_next:', Q_targets_next.shape)
-        #print('dones:', dones.shape)
-        
-        
         Q_targets = rewards + (gamma * Q_targets_next * (1 - dones))
 
         # Compute critic loss
@@ -215,11 +202,12 @@ class Agent():
         for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
             target_param.data.copy_(tau*local_param.data + (1.0-tau)*target_param.data)
 
+
 class OUNoise:
     """Ornstein-Uhlenbeck process."""
 
     #def __init__(self, size, seed, mu=0., theta=0.15, sigma=0.2):
-    def __init__(self, size, seed, mu=0., theta=0.15, sigma=2.0):
+    def __init__(self, size, seed, mu=0., theta=1.0, sigma=0.5):
         """Initialize parameters and noise process."""
         self.mu = mu * np.ones(size)
         self.theta = theta
@@ -235,7 +223,7 @@ class OUNoise:
         """Update internal state and return it as a noise sample."""
         x = self.state
         dx = self.theta * (self.mu - x) + self.sigma * np.array([random.random() for i in range(len(x))])  # ORIGINAL
-        #dx = self.theta * (self.mu - x) + self.sigma * np.array([random.random()-0.5 for i in range(len(x))])  # YK:
+        
         self.state = x + dx
         return self.state
 
